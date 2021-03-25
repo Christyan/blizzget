@@ -4,6 +4,7 @@
 #include "frameui/window.h"
 #include "frameui/framewnd.h"
 #include <CommCtrl.h>
+#include <string>
 
 class Scrollable : public WindowFrame {
 public:
