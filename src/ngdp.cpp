@@ -43,6 +43,7 @@ namespace NGDP {
     { "wow_classic", "World of Warcraft Classic" },
     { "wow_classic_beta", "World of Warcraft Classic Beta" },
     { "wowdemo", "World of Warcraft Demo" },
+    { "wowdev", "World of Warcraft Dev" },
   };
 
   NGDP::NGDP(std::string const& app)
