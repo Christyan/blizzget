@@ -22,6 +22,7 @@ namespace NGDP {
     { "heroc", "Heroes of the Storm Tournament" },
     { "hsb", "Hearthstone" },
     { "hst", "Hearthstone Test (Partial)" },
+    { "osib", "Diablo II: Resurrected (Alpha)" },
     { "pro", "Overwatch Retail" },
     { "prot", "Overwatch Test" },
     { "proc", "Overwatch Tournament" },
