@@ -25,6 +25,7 @@ namespace NGDP {
     { "osib", "Diablo II: Resurrected (Alpha)" },
     { "pro", "Overwatch Retail" },
     { "prot", "Overwatch Test" },
+    { "prob", "Overwatch Beta" },
     { "proc", "Overwatch Tournament" },
     { "prodev", "Overwatch Dev (Encrypted)" },
     { "s1", "StarCraft I" },
