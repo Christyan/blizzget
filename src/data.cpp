@@ -6,6 +6,7 @@
 #include "wizard.h"
 #include <algorithm>
 #include <time.h>
+#include <string>
 
 void ProgramData::Task::stop() {
   terminate_ = true;
@@ -50,11 +51,13 @@ int ProgramData::Task::proc() {
 }
 
 void ProgramData::setTask(Task* task) {
-  // duplicating the unique_ptr just in case
-  {
+  // FIXME: This causes an crash since old pointer is begin released before its swap contents.
+  // smart_ptr.reset is enough for now
+
+  /* {
     auto tsk = task_;
     if (tsk) tsk->stop();
-  }
+  }*/
   task_.reset(task);
   if (task) task->start(this);
 }
