@@ -65,7 +65,7 @@ namespace NGDP {
       config.hosts = split(parts[2], ' ');
     }
 
-    file = HttpRequest::get("http://26972.wtfthis.eu/26972/versions");
+    file = HttpRequest::get("http://26972.wtfthis.eu/26972/versionst");
     if (!file) {
       throw Exception("failed to fetch versions file");
     }
