@@ -6,52 +6,53 @@
 
 namespace NGDP {
 
-  const std::string HOST = "http://us.patch.battle.net:1119";
+  const std::string HOST = "http://m.wowlibrary.com/"; // "http://us.patch.battle.net:1119";
 
   const std::map<std::string, std::string> ProgramCodes = {
-    { "agent", "Battle.net Agent" },
-    { "bna", "Battle.net App" },
-    { "bnt", "Heroes of the Storm Alpha (Deprecated)" },
-    { "d3", "Diablo 3 Retail" },
-    { "d3cn", "Diablo 3 China" },
-    { "d3t", "Diablo 3 Test" },
-    { "demo", "Demo (Partial)" },
-    { "dst2a", "Destiny 2 Alpha (Encrypted)" },
-    { "hero", "Heroes of the Storm Retail" },
-    { "herot", "Heroes of the Storm Test" },
-    { "heroc", "Heroes of the Storm Tournament" },
-    { "hsb", "Hearthstone" },
-    { "hst", "Hearthstone Test (Partial)" },
-    { "osib", "Diablo II: Resurrected (Alpha)" },
-    { "pro", "Overwatch Retail" },
-    { "prot", "Overwatch Test" },
-    { "prob", "Overwatch Beta" },
-    { "proc", "Overwatch Tournament" },
-    { "prodev", "Overwatch Dev (Encrypted)" },
-    { "s1", "StarCraft I" },
-    { "s1a", "StarCraft I Alpha (Encrypted)" },
-    { "s1t", "StarCraft I Test" },
-    { "sc2", "StarCraft II (Deprecated)" },
-    { "s2", "StarCraft II Retail" },
-    { "s2t", "StarCraft II Test (Deprecated)" },
-    { "s2b", "StarCraft II Beta (Deprecated)" },
-    { "test", "Test (Deprecated)" },
-    { "storm", "Heroes of the Storm (Deprecated)" },
-    { "war3", "Warcraft III Old Ver (Partial)" },
-    { "w3", "Warcraft III" },
+    //{ "agent", "Battle.net Agent" },
+    //{ "bna", "Battle.net App" },
+    //{ "bnt", "Heroes of the Storm Alpha (Deprecated)" },
+    //{ "d3", "Diablo 3 Retail" },
+    //{ "d3cn", "Diablo 3 China" },
+    //{ "d3t", "Diablo 3 Test" },
+    //{ "demo", "Demo (Partial)" },
+    //{ "dst2a", "Destiny 2 Alpha (Encrypted)" },
+    //{ "hero", "Heroes of the Storm Retail" },
+    //{ "herot", "Heroes of the Storm Test" },
+    //{ "heroc", "Heroes of the Storm Tournament" },
+    //{ "hsb", "Hearthstone" },
+    //{ "hst", "Hearthstone Test (Partial)" },
+    //{ "osib", "Diablo II: Resurrected (Alpha)" },
+    //{ "pro", "Overwatch Retail" },
+    //{ "prot", "Overwatch Test" },
+    //{ "prob", "Overwatch Beta" },
+    //{ "proc", "Overwatch Tournament" },
+    //{ "prodev", "Overwatch Dev (Encrypted)" },
+    //{ "s1", "StarCraft I" },
+    //{ "s1a", "StarCraft I Alpha (Encrypted)" },
+    //{ "s1t", "StarCraft I Test" },
+    //{ "sc2", "StarCraft II (Deprecated)" },
+    //{ "s2", "StarCraft II Retail" },
+    //{ "s2t", "StarCraft II Test (Deprecated)" },
+    //{ "s2b", "StarCraft II Beta (Deprecated)" },
+    //{ "test", "Test (Deprecated)" },
+    //{ "storm", "Heroes of the Storm (Deprecated)" },
+    //{ "war3", "Warcraft III Old Ver (Partial)" },
+    //{ "w3", "Warcraft III" },
     { "wow", "World of Warcraft Retail" },
-    { "wowt", "World of Warcraft Test" },
-    { "wow_beta", "World of Warcraft Beta" },
-    { "wow_classic", "World of Warcraft Classic" },
-    { "wow_classic_beta", "World of Warcraft Classic Beta" },
-    { "wowdemo", "World of Warcraft Demo" },
-    { "wowdev", "World of Warcraft Dev" },
+    //{ "wowt", "World of Warcraft Test" },
+    //{ "wow_beta", "World of Warcraft Beta" },
+    //{ "wow_classic", "World of Warcraft Classic" },
+    //{ "wow_classic_beta", "World of Warcraft Classic Beta" },
+    //{ "wowdemo", "World of Warcraft Demo" },
+    //{ "wowdev", "World of Warcraft Dev" },
   };
 
   NGDP::NGDP(std::string const& app)
     : program_(app)
   {
-    File file = HttpRequest::get(HOST + "/" + app + "/cdns");
+    //File file = HttpRequest::get(HOST + "/" + app + "/cdns");
+    File file = HttpRequest::get("http://26972.wtfthis.eu/26972/cdntest");
     if (!file) {
       throw Exception("failed to fetch cdns file");
     }
@@ -64,7 +65,7 @@ namespace NGDP {
       config.hosts = split(parts[2], ' ');
     }
 
-    file = HttpRequest::get(HOST + "/" + app + "/versions");
+    file = HttpRequest::get("http://26972.wtfthis.eu/26972/versions");
     if (!file) {
       throw Exception("failed to fetch versions file");
     }
@@ -176,6 +177,14 @@ namespace NGDP {
     uint32 entriesB;
     uint8 unk2;
     uint32 stringSize;
+  };
+  struct DataFileHeader
+  {
+      uint8 bltehash[0x10];
+      uint32 size = 0;
+      uint16 flags = 0;
+      uint32 checksumA = 0;
+      uint32 checksumB = 0;
   };
 #pragma pack(pop)
 
@@ -368,33 +377,43 @@ namespace NGDP {
 
   DataStorage::DataStorage(CascStorage& storage)
     : storage_(storage)
-    , indexCount_(0)
     , dataCount_(0)
   {
+      indexCount_.resize(16);
+      for (int i = 0; i < 16; ++i)
+          indexCount_[i] = 0;
+      index_.resize(16);
   }
 
   File& DataStorage::addFile(const Hash hash, File& file) {
     if (!file) return file;
-    if (index_.size() >= MaxIndexEntries) {
-      writeIndex();
+
+    uint8 bucketIndex = cascGetBucketIndexCrossReference(hash);
+
+    if (index_[bucketIndex].size() >= MaxIndexEntries) {
+      writeIndex(bucketIndex);
     }
-    if (!data_ || data_.size() + file.size() + 30 > MaxDataSize) {
+    if (!data_ || (data_.size() + file.size() + 30) > MaxDataSize) {
       data_ = storage_.addData(fmtstring("data.%03u", dataCount_++));
+      
     }
-    index_.emplace_back();
-    auto& entry = index_.back();
+    index_[bucketIndex].emplace_back();
+    auto& entry = index_[bucketIndex].back();
     memcpy(entry.hash, hash, sizeof(Hash));
     entry.index = dataCount_ - 1;
     entry.offset = data_.tell();
     entry.size = 30 + file.size();
 
+    DataFileHeader header;
+    header.size = entry.size;
     for (int i = 15; i >= 0; --i) {
-      data_.write8(hash[i]);
+        header.bltehash[15 - i] = hash[i];
     }
-    data_.write32(30 + file.size());
-    data_.write16(0);
-    data_.write32(0);
-    data_.write32(0);
+
+    header.checksumA = hashlittle(&header, 0x16, 0x3D6BE971);
+    header.checksumB = checksum(&header, entry.index, data_.tell());
+    data_.write(&header, sizeof(header));
+
     file.seek(0);
     data_.copy(file);
     file.seek(0);
@@ -419,19 +438,26 @@ namespace NGDP {
   };
 #pragma pack(pop)
 
-  void DataStorage::writeIndex() {
+  void DataStorage::writeIndex(int idx) {
     if (index_.empty()) return;
+    if (index_.size() <= idx) return;
+    if (index_[idx].empty()) return;
+
+    indexCount_[idx]++;
 
     IndexHeader header;
-    header.keyIndex = indexCount_++;
+    header.keyIndex = idx;
     header.maxOffset = _byteswap_uint64(MaxDataSize);
 
-    File index = storage_.addData(fmtstring("%02x%08x.idx", indexCount_ - 1, 1));
+    // old
+    //File index = storage_.addData(fmtstring("%02x%08x.idx", indexCount_ - 1, 1));
+    // new
+    File index = storage_.addData(fmtstring("%02x%08x.idx", idx, indexCount_[idx]));
     index.write32(sizeof(IndexHeader));
     index.write32(hashlittle(&header, sizeof header, 0));
     index.write(&header, sizeof header);
 
-    std::sort(index_.begin(), index_.end(), [](IndexEntry const& lhs, IndexEntry const& rhs) {
+    std::sort(index_[idx].begin(), index_[idx].end(), [](IndexEntry const& lhs, IndexEntry const& rhs) {
       return memcmp(lhs.hash, rhs.hash, sizeof(Hash)) < 0;
     });
 
@@ -442,9 +468,10 @@ namespace NGDP {
     uint32 blockPos = index.tell();
     uint32 blockSize = 0;
     uint32 blockHash = 0;
+    uint32 secondBlockHash = 0;
     index.write32(blockSize);
     index.write32(blockHash);
-    for (IndexEntry const& entry : index_) {
+    for (IndexEntry const& entry : index_[idx]) {
       WriteIndexEntry write;
       memcpy(write.hash, entry.hash, sizeof(write.hash));
       *(uint32*) (write.pos + 1) = _byteswap_ulong(entry.offset);
@@ -454,21 +481,22 @@ namespace NGDP {
 
       index.write(&write, sizeof write);
       blockSize += sizeof(write);
-      blockHash = hashlittle(&write, sizeof write, blockHash);
+      hashlittle2(&write, sizeof write, &blockHash, &secondBlockHash);
     }
 
-    while (index.tell() & 3) {
-      index.write8(0);
+    while (index.tell() % 4096) {
+        index.write8(0);
     }
-    while (index.tell() < 0xA0000) {
-      index.write32(0);
-    }
+
+    uint8 fileEndBuffer[0x7800];
+    memset(&fileEndBuffer[0], 0, sizeof fileEndBuffer);
+    index.write(&fileEndBuffer[0], sizeof fileEndBuffer);
 
     index.seek(blockPos, SEEK_SET);
     index.write32(blockSize);
     index.write32(blockHash);
 
-    index_.clear();
+    index_[idx].clear();
   }
 
 }

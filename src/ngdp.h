@@ -156,12 +156,13 @@ namespace NGDP {
     File& addFile(const Hash hash, File& file); // <- original (compressed) file
 
     void finish() {
-      writeIndex();
+        for (int i = 0; i < 16; ++i)
+            writeIndex(i);
     }
 
   private:
     enum {
-      MaxIndexEntries = (0x8E000 - 0x28) / 18,
+      MaxIndexEntries = (0xC0000 - 0x28) / 18,
       MaxDataSize = 0x40000000,
     };
     CascStorage& storage_;
@@ -171,12 +172,22 @@ namespace NGDP {
       uint16 index;
       uint32 offset;
     };
-    std::vector<IndexEntry> index_;
+    std::vector<std::vector<IndexEntry>> index_;
     File data_;
-    uint32 indexCount_;
+    std::vector<uint32> indexCount_;
     uint32 dataCount_;
 
-    void writeIndex();
+    uint8_t cascGetBucketIndex(const Hash k) {
+        uint8_t i = k[0] ^ k[1] ^ k[2] ^ k[3] ^ k[4] ^ k[5] ^ k[6] ^ k[7] ^ k[8];
+        return (i & 0xf) ^ (i >> 4);
+    }
+
+    uint8_t cascGetBucketIndexCrossReference(const Hash k) {
+        uint8_t i = cascGetBucketIndex(k);
+        return i % 16;
+    }
+
+    void writeIndex(int idx);
   };
 
 }

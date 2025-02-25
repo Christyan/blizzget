@@ -126,6 +126,167 @@ void MD5::run() {
   bufSize = 0;
 }
 
+#define mix(a,b,c) \
+{ \
+  a -= c;  a ^= rot(c, 4);  c += b; \
+  b -= a;  b ^= rot(a, 6);  a += c; \
+  c -= b;  c ^= rot(b, 8);  b += a; \
+  a -= c;  a ^= rot(c,16);  c += b; \
+  b -= a;  b ^= rot(a,19);  a += c; \
+  c -= b;  c ^= rot(b, 4);  b += a; \
+}
+
+#define final(a,b,c) \
+{ \
+  c ^= b; c -= rot(b,14); \
+  a ^= c; a -= rot(c,11); \
+  b ^= a; b -= rot(a,25); \
+  c ^= b; c -= rot(b,16); \
+  a ^= c; a -= rot(c,4);  \
+  b ^= a; b -= rot(a,14); \
+  c ^= b; c -= rot(b,24); \
+}
+
+void hashlittle2(
+  const void *key,       /* the key to hash */
+  size_t      length,    /* length of the key */
+  uint32   *pc,        /* IN: primary initval, OUT: primary hash */
+  uint32   *pb)        /* IN: secondary initval, OUT: secondary hash */
+{
+  uint32_t a,b,c;                                          /* internal state */
+  union { const void *ptr; size_t i; } u;     /* needed for Mac Powerbook G4 */
+
+  /* Set up the internal state */
+  a = b = c = 0xdeadbeef + ((uint32_t)length) + *pc;
+  c += *pb;
+
+  u.ptr = key;
+  if ((u.i & 0x3) == 0) {
+    const uint32_t *k = (const uint32_t *)key;         /* read 32-bit chunks */
+    const uint8_t  *k8;
+
+    /*------ all but last block: aligned reads and affect 32 bits of (a,b,c) */
+    while (length > 12)
+    {
+      a += k[0];
+      b += k[1];
+      c += k[2];
+      mix(a,b,c);
+      length -= 12;
+      k += 3;
+    }
+
+    switch(length)
+    {
+    case 12: c+=k[2]; b+=k[1]; a+=k[0]; break;
+    case 11: c+=k[2]&0xffffff; b+=k[1]; a+=k[0]; break;
+    case 10: c+=k[2]&0xffff; b+=k[1]; a+=k[0]; break;
+    case 9 : c+=k[2]&0xff; b+=k[1]; a+=k[0]; break;
+    case 8 : b+=k[1]; a+=k[0]; break;
+    case 7 : b+=k[1]&0xffffff; a+=k[0]; break;
+    case 6 : b+=k[1]&0xffff; a+=k[0]; break;
+    case 5 : b+=k[1]&0xff; a+=k[0]; break;
+    case 4 : a+=k[0]; break;
+    case 3 : a+=k[0]&0xffffff; break;
+    case 2 : a+=k[0]&0xffff; break;
+    case 1 : a+=k[0]&0xff; break;
+    case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
+    }
+
+  } else if (((u.i & 0x1) == 0)) {
+    const uint16_t *k = (const uint16_t *)key;         /* read 16-bit chunks */
+    const uint8_t  *k8;
+
+    /*--------------- all but last block: aligned reads and different mixing */
+    while (length > 12)
+    {
+      a += k[0] + (((uint32_t)k[1])<<16);
+      b += k[2] + (((uint32_t)k[3])<<16);
+      c += k[4] + (((uint32_t)k[5])<<16);
+      mix(a,b,c);
+      length -= 12;
+      k += 6;
+    }
+
+    /*----------------------------- handle the last (probably partial) block */
+    k8 = (const uint8_t *)k;
+    switch(length)
+    {
+    case 12: c+=k[4]+(((uint32_t)k[5])<<16);
+             b+=k[2]+(((uint32_t)k[3])<<16);
+             a+=k[0]+(((uint32_t)k[1])<<16);
+             break;
+    case 11: c+=((uint32_t)k8[10])<<16;     /* fall through */
+    case 10: c+=k[4];
+             b+=k[2]+(((uint32_t)k[3])<<16);
+             a+=k[0]+(((uint32_t)k[1])<<16);
+             break;
+    case 9 : c+=k8[8];                      /* fall through */
+    case 8 : b+=k[2]+(((uint32_t)k[3])<<16);
+             a+=k[0]+(((uint32_t)k[1])<<16);
+             break;
+    case 7 : b+=((uint32_t)k8[6])<<16;      /* fall through */
+    case 6 : b+=k[2];
+             a+=k[0]+(((uint32_t)k[1])<<16);
+             break;
+    case 5 : b+=k8[4];                      /* fall through */
+    case 4 : a+=k[0]+(((uint32_t)k[1])<<16);
+             break;
+    case 3 : a+=((uint32_t)k8[2])<<16;      /* fall through */
+    case 2 : a+=k[0];
+             break;
+    case 1 : a+=k8[0];
+             break;
+    case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
+    }
+
+  } else {                        /* need to read the key one byte at a time */
+    const uint8_t *k = (const uint8_t *)key;
+
+    /*--------------- all but the last block: affect some 32 bits of (a,b,c) */
+    while (length > 12)
+    {
+      a += k[0];
+      a += ((uint32_t)k[1])<<8;
+      a += ((uint32_t)k[2])<<16;
+      a += ((uint32_t)k[3])<<24;
+      b += k[4];
+      b += ((uint32_t)k[5])<<8;
+      b += ((uint32_t)k[6])<<16;
+      b += ((uint32_t)k[7])<<24;
+      c += k[8];
+      c += ((uint32_t)k[9])<<8;
+      c += ((uint32_t)k[10])<<16;
+      c += ((uint32_t)k[11])<<24;
+      mix(a,b,c);
+      length -= 12;
+      k += 12;
+    }
+
+    /*-------------------------------- last block: affect all 32 bits of (c) */
+    switch(length)                   /* all the case statements fall through */
+    {
+    case 12: c+=((uint32_t)k[11])<<24;
+    case 11: c+=((uint32_t)k[10])<<16;
+    case 10: c+=((uint32_t)k[9])<<8;
+    case 9 : c+=k[8];
+    case 8 : b+=((uint32_t)k[7])<<24;
+    case 7 : b+=((uint32_t)k[6])<<16;
+    case 6 : b+=((uint32_t)k[5])<<8;
+    case 5 : b+=k[4];
+    case 4 : a+=((uint32_t)k[3])<<24;
+    case 3 : a+=((uint32_t)k[2])<<16;
+    case 2 : a+=((uint32_t)k[1])<<8;
+    case 1 : a+=k[0];
+             break;
+    case 0 : *pc=c; *pb=b; return;  /* zero length strings require no mixing */
+    }
+  }
+
+  final(a,b,c);
+  *pc=c; *pb=b;
+}
+
 uint64 jenkins(void const* buf, uint32 length) {
   uint32 a, b, c;
   a = b = c = 0xDEADBEEF + length + 2;
@@ -220,4 +381,36 @@ uint32 hashlittle(void const* buf, uint32 length, uint32 initval) {
   c ^= b; c -= rot(b, 24);
 
   return c;
+}
+
+// Arguments:
+//  header: Pointer to the memory containing the header
+//  archive_index: Number of the data file the record is stored in (e.g. xxx in data.xxx)
+//  archive_offset: Offset of the header inside the archive file
+// Precondition: Header is at least 0x1e bytes (e.g a full header)
+// Precondition: checksum_a has already been calculated and stored in the header
+// Assumption: Code is written assuming little endian.
+uint32_t checksum(void const* buf, uint16_t archive_index, uint32_t archive_offset) {
+    // Table is extracted from Agent.exe 8020. Hasn't changed for quite a while
+    static uint32_t TABLE_16C57A8[0x10] = {
+        0x049396b8, 0x72a82a9b, 0xee626cca, 0x9917754f, 0x15de40b1, 0xf5a8a9b6, 0x421eac7e, 0xa9d55c9a,
+        0x317fd40c, 0x04faf80d, 0x3d6be971, 0x52933cfd, 0x27f64b7d, 0xc6f5c11b, 0xd5757e3a, 0x6c388745,
+    };
+
+    // Top two bits of the offset must be set to the bottom two bits of the archive index
+    uint32_t offset = (offset & 0x3fffffff) | (archive_index & 3) << 30;
+   
+    uint32_t encoded_offset = TABLE_16C57A8[(offset + 0x1e) & 0xf] ^ (offset + 0x1e);
+   
+    uint32_t hashed_header = 0;
+    for (int i = 0; i < 0x1a; i++) { // offset of checksum_b in header
+        ((uint8_t *)&hashed_header)[(i + offset) & 3] ^= ((uint8_t*)buf)[i];
+    }
+   
+    uint32_t checksum_b = 0;
+    for (int j = 0; j < 4; j++) {
+        int i = j + 0x1a + offset;
+        ((uint8_t *)&checksum_b)[j] = ((uint8_t *)&hashed_header)[i & 3] ^ ((uint8_t *)&encoded_offset)[i & 3];
+    }
+    return checksum_b;
 }

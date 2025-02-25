@@ -333,6 +333,9 @@ void ProgramData::download(std::string const& path) {
         // save encoding file
 
         auto buildConfig = data_->build_configs[data_->selected_build];
+        //std::string patchConfig = buildConfig["patch-config"];
+        //storage.addConfig(patchConfig, ngdp->load(patchConfig));
+
         std::string encodingHash = split(buildConfig["encoding"])[1];
         NGDP::from_string(hash, encodingHash);
         data.addFile(hash, loadData(encodingHash));

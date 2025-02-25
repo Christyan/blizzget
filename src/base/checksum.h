@@ -29,5 +29,7 @@ public:
   }
 };
 
+void hashlittle2(const void* key, size_t length, uint32* pc, uint32* pb);
 uint64 jenkins(void const* buf, uint32 length);
 uint32 hashlittle(void const* buf, uint32 length, uint32 initval);
+uint32_t checksum(void const* buf, uint16_t archive_index, uint32_t archive_offset);
