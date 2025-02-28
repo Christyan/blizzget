@@ -154,7 +154,7 @@ namespace NGDP {
     }
 
     File& addFile(const Hash hash, File& file); // <- original (compressed) file
-    void addIndex(const Hash hash, uint32 size, bool isCrossReference = false);
+    void addIndex(const Hash hash, uint32 size);
     void addDataHeader(const Hash hash, uint32 size, uint16 flags = 0);
 
     void finish() {
@@ -164,7 +164,6 @@ namespace NGDP {
 
   private:
     enum {
-      MaxIndexEntries = (0xC0000 - 0x28) / 18,
       MaxDataSize = 0x40000000,
     };
     CascStorage& storage_;
@@ -175,7 +174,6 @@ namespace NGDP {
       uint32 offset;
     };
     std::vector<std::vector<IndexEntry>> index_;
-    std::vector<std::vector<IndexEntry>> crossIndicies_;
     File data_;
     uint32 dataCount_;
 

@@ -380,7 +380,6 @@ namespace NGDP {
     , dataCount_(0)
   {
       index_.resize(16);
-      crossIndicies_.resize(16);
   }
 
   File& DataStorage::addFile(const Hash hash, File& file) {
@@ -397,7 +396,7 @@ namespace NGDP {
             reConstructionHeaderHash[0] = (uint8_t)i;
             reConstructionHeaderHash[1] = (uint8_t)(dataCount_ - 1);
 
-            addIndex(reConstructionHeaderHash, 0, true);
+            addIndex(reConstructionHeaderHash, 0);
             addDataHeader(reConstructionHeaderHash, 0, 1);
         }
     }
@@ -411,19 +410,12 @@ namespace NGDP {
     return file;
   }
 
-  void DataStorage::addIndex(const Hash hash, uint32 size, bool isCrossReference /*= false*/)
+  void DataStorage::addIndex(const Hash hash, uint32 size)
   {
       uint8 bucketIndex = cascGetBucketIndexCrossReference(hash);
-      if (hash[0] == 0x60 && hash[1] == 0x08)
-      {
-          printf("sdfd");
-      }
 
-      if (isCrossReference)
-          crossIndicies_[bucketIndex].emplace_back();
-      else
-          index_[bucketIndex].emplace_back();
-      auto& entry = isCrossReference ? crossIndicies_[bucketIndex].back() : index_[bucketIndex].back();
+      index_[bucketIndex].emplace_back();
+      auto& entry = index_[bucketIndex].back();
       memcpy(entry.hash, hash, sizeof(Hash));
       entry.index = dataCount_ - 1;
       entry.offset = data_.tell();
@@ -469,7 +461,7 @@ namespace NGDP {
 
     uint32_t indexCounter = 0;
 
-    while (!index_[idx].empty())
+    //while (!index_[idx].empty())
     {
         ++indexCounter;
         File index = storage_.addData(fmtstring("%02x%08x.idx", idx, indexCounter));
@@ -485,18 +477,8 @@ namespace NGDP {
         index.write32(0);
         index.write32(0);
         
-        std::vector<IndexEntry> bucket;
-        bucket.insert(bucket.end(), crossIndicies_[idx].begin(), crossIndicies_[idx].end());
 
-        int32 remainingEmptySpace = MaxIndexEntries - bucket.size();
-        if (remainingEmptySpace > 0)
-        {
-            std::vector<IndexEntry>::iterator end_itr = index_[idx].begin() + (remainingEmptySpace > index_[idx].size() ? index_[idx].size() : remainingEmptySpace);
-            bucket.insert(bucket.end(), index_[idx].begin(), end_itr);
-            index_[idx].erase(index_[idx].begin(), end_itr);
-        }
-
-        std::sort(bucket.begin(), bucket.end(), [](IndexEntry const& lhs, IndexEntry const& rhs) {
+        std::sort(index_[idx].begin(), index_[idx].end(), [](IndexEntry const& lhs, IndexEntry const& rhs) {
             return memcmp(lhs.hash, rhs.hash, sizeof(Hash)) < 0;
             });
 
@@ -507,7 +489,7 @@ namespace NGDP {
         uint32 secondBlockHash = 0;
         index.write32(blockSize);
         index.write32(blockHash);
-        for (IndexEntry const& entry : bucket) {
+        for (IndexEntry const& entry : index_[idx]) {
             WriteIndexEntry write;
             memcpy(write.hash, entry.hash, sizeof(write.hash));
             *(uint32*)(write.pos + 1) = _byteswap_ulong(entry.offset);
@@ -519,13 +501,19 @@ namespace NGDP {
             blockSize += sizeof(write);
             hashlittle2(&write, sizeof write, &blockHash, &secondBlockHash);
         }
-
-        int32 needAmount = 0xC0000 - index.tell();
-
+        
         std::vector<uint8_t> needRemainingData;
-        needRemainingData.resize(needAmount);
+        needRemainingData.resize(4096 * 8); // need blocks end of file for client
         memset(needRemainingData.data(), 0, needRemainingData.size());
         index.write(needRemainingData.data(), needRemainingData.size());
+
+        if ((index.tell() % 4096) != 0)
+        {
+            int32_t remainingAmount = (4096 - (index.tell() % 4096));
+            needRemainingData.resize(remainingAmount);
+            memset(needRemainingData.data(), 0, needRemainingData.size());
+            index.write(needRemainingData.data(), needRemainingData.size());
+        }
 
         index.seek(blockPos, SEEK_SET);
         index.write32(blockSize);
