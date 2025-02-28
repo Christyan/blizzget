@@ -454,14 +454,13 @@ namespace NGDP {
   };
 #pragma pack(pop)
 
-  void DataStorage::writeIndex(int idx) {
+  void DataStorage::writeIndex(size_t indexFileSize, int idx) {
     if (index_.empty()) return;
     if (index_.size() <= idx) return;
     if (index_[idx].empty()) return;
 
     uint32_t indexCounter = 0;
 
-    //while (!index_[idx].empty())
     {
         ++indexCounter;
         File index = storage_.addData(fmtstring("%02x%08x.idx", idx, indexCounter));
@@ -502,18 +501,12 @@ namespace NGDP {
             hashlittle2(&write, sizeof write, &blockHash, &secondBlockHash);
         }
         
+        int32_t remainingAmount = indexFileSize - index.tell();
+
         std::vector<uint8_t> needRemainingData;
-        needRemainingData.resize(4096 * 8); // need blocks end of file for client
+        needRemainingData.resize(remainingAmount); // need blocks end of file for client
         memset(needRemainingData.data(), 0, needRemainingData.size());
         index.write(needRemainingData.data(), needRemainingData.size());
-
-        if ((index.tell() % 4096) != 0)
-        {
-            int32_t remainingAmount = (4096 - (index.tell() % 4096));
-            needRemainingData.resize(remainingAmount);
-            memset(needRemainingData.data(), 0, needRemainingData.size());
-            index.write(needRemainingData.data(), needRemainingData.size());
-        }
 
         index.seek(blockPos, SEEK_SET);
         index.write32(blockSize);

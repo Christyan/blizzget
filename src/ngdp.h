@@ -158,8 +158,20 @@ namespace NGDP {
     void addDataHeader(const Hash hash, uint32 size, uint16 flags = 0);
 
     void finish() {
+        size_t indexFileSize = 0;
         for (int i = 0; i < 16; ++i)
-            writeIndex(i);
+        {
+            if (index_[i].size() > indexFileSize)
+                indexFileSize = index_[i].size();
+        }
+
+        indexFileSize = (indexFileSize * 18) + 0x28;
+        indexFileSize += 4096 * 8; // need 0x7800 buffer at end of file
+        if ((indexFileSize % 4096) != 0)
+            indexFileSize += (4096 - (indexFileSize % 4096));
+
+        for (int i = 0; i < 16; ++i)
+            writeIndex(indexFileSize, i);
     }
 
   private:
@@ -187,7 +199,7 @@ namespace NGDP {
         return (i + 1) % 16;
     }
 
-    void writeIndex(int idx);
+    void writeIndex(size_t indexFileSize, int idx);
   };
 
 }
