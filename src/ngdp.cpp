@@ -52,7 +52,7 @@ namespace NGDP {
     : program_(app)
   {
     //File file = HttpRequest::get(HOST + "/" + app + "/cdns");
-    File file = HttpRequest::get("http://26972.wtfthis.eu/26972/cdntest");
+    File file = HttpRequest::get("http://26972.wtfthis.eu/24742/cdntest");
     if (!file) {
       throw Exception("failed to fetch cdns file");
     }
@@ -65,7 +65,7 @@ namespace NGDP {
       config.hosts = split(parts[2], ' ');
     }
 
-    file = HttpRequest::get("http://26972.wtfthis.eu/26972/versionst");
+    file = HttpRequest::get("http://26972.wtfthis.eu/24742/versionst");
     if (!file) {
       throw Exception("failed to fetch versions file");
     }
@@ -379,10 +379,8 @@ namespace NGDP {
     : storage_(storage)
     , dataCount_(0)
   {
-      indexCount_.resize(16);
-      for (int i = 0; i < 16; ++i)
-          indexCount_[i] = 0;
       index_.resize(16);
+      crossIndicies_.resize(16);
   }
 
   File& DataStorage::addFile(const Hash hash, File& file) {
@@ -390,34 +388,60 @@ namespace NGDP {
 
     uint8 bucketIndex = cascGetBucketIndexCrossReference(hash);
 
-    if (index_[bucketIndex].size() >= MaxIndexEntries) {
-      writeIndex(bucketIndex);
-    }
     if (!data_ || (data_.size() + file.size() + 30) > MaxDataSize) {
-      data_ = storage_.addData(fmtstring("data.%03u", dataCount_++));
-      
-    }
-    index_[bucketIndex].emplace_back();
-    auto& entry = index_[bucketIndex].back();
-    memcpy(entry.hash, hash, sizeof(Hash));
-    entry.index = dataCount_ - 1;
-    entry.offset = data_.tell();
-    entry.size = 30 + file.size();
+        data_ = storage_.addData(fmtstring("data.%03u", dataCount_++));
+        for (int i = 0; i < 16; ++i) {
+            Hash reConstructionHeaderHash;
+            memset(reConstructionHeaderHash, 0, sizeof reConstructionHeaderHash);
+            *((uint64_t*)&reConstructionHeaderHash[1]) = 0x179860F6B53AB282; // its generated from hostname + another thing (m5hash)
+            reConstructionHeaderHash[0] = (uint8_t)i;
+            reConstructionHeaderHash[1] = (uint8_t)(dataCount_ - 1);
 
-    DataFileHeader header;
-    header.size = entry.size;
-    for (int i = 15; i >= 0; --i) {
-        header.bltehash[15 - i] = hash[i];
+            addIndex(reConstructionHeaderHash, 0, true);
+            addDataHeader(reConstructionHeaderHash, 0, 1);
+        }
     }
 
-    header.checksumA = hashlittle(&header, 0x16, 0x3D6BE971);
-    header.checksumB = checksum(&header, entry.index, data_.tell());
-    data_.write(&header, sizeof(header));
+    addIndex(hash, file.size());
+    addDataHeader(hash, file.size());
 
     file.seek(0);
     data_.copy(file);
     file.seek(0);
     return file;
+  }
+
+  void DataStorage::addIndex(const Hash hash, uint32 size, bool isCrossReference /*= false*/)
+  {
+      uint8 bucketIndex = cascGetBucketIndexCrossReference(hash);
+      if (hash[0] == 0x60 && hash[1] == 0x08)
+      {
+          printf("sdfd");
+      }
+
+      if (isCrossReference)
+          crossIndicies_[bucketIndex].emplace_back();
+      else
+          index_[bucketIndex].emplace_back();
+      auto& entry = isCrossReference ? crossIndicies_[bucketIndex].back() : index_[bucketIndex].back();
+      memcpy(entry.hash, hash, sizeof(Hash));
+      entry.index = dataCount_ - 1;
+      entry.offset = data_.tell();
+      entry.size = sizeof DataFileHeader + size;
+  }
+
+  void DataStorage::addDataHeader(const Hash hash, uint32 size, uint16 flags /*= 0*/)
+  {
+      DataFileHeader header;
+      header.size = sizeof DataFileHeader + size;
+      header.flags = flags;
+      for (int i = 15; i >= 0; --i) {
+          header.bltehash[15 - i] = hash[i];
+      }
+
+      header.checksumA = hashlittle(&header, 0x16, 0x3D6BE971);
+      header.checksumB = checksum(&header, dataCount_ - 1, data_.tell());
+      data_.write(&header, sizeof(header));
   }
 
 #pragma pack(push, 1)
@@ -443,60 +467,70 @@ namespace NGDP {
     if (index_.size() <= idx) return;
     if (index_[idx].empty()) return;
 
-    indexCount_[idx]++;
+    uint32_t indexCounter = 0;
 
-    IndexHeader header;
-    header.keyIndex = idx;
-    header.maxOffset = _byteswap_uint64(MaxDataSize);
+    while (!index_[idx].empty())
+    {
+        ++indexCounter;
+        File index = storage_.addData(fmtstring("%02x%08x.idx", idx, indexCounter));
 
-    // old
-    //File index = storage_.addData(fmtstring("%02x%08x.idx", indexCount_ - 1, 1));
-    // new
-    File index = storage_.addData(fmtstring("%02x%08x.idx", idx, indexCount_[idx]));
-    index.write32(sizeof(IndexHeader));
-    index.write32(hashlittle(&header, sizeof header, 0));
-    index.write(&header, sizeof header);
+        IndexHeader header;
+        header.keyIndex = idx;
+        header.maxOffset = _byteswap_uint64(MaxDataSize);
 
-    std::sort(index_[idx].begin(), index_[idx].end(), [](IndexEntry const& lhs, IndexEntry const& rhs) {
-      return memcmp(lhs.hash, rhs.hash, sizeof(Hash)) < 0;
-    });
+        index.write32(sizeof(IndexHeader));
+        index.write32(hashlittle(&header, sizeof header, 0));
+        index.write(&header, sizeof header);
+        // 8byte padding (32 byte block)
+        index.write32(0);
+        index.write32(0);
+        
+        std::vector<IndexEntry> bucket;
+        bucket.insert(bucket.end(), crossIndicies_[idx].begin(), crossIndicies_[idx].end());
 
-    // pad
-    index.write32(0);
-    index.write32(0);
+        int32 remainingEmptySpace = MaxIndexEntries - bucket.size();
+        if (remainingEmptySpace > 0)
+        {
+            std::vector<IndexEntry>::iterator end_itr = index_[idx].begin() + (remainingEmptySpace > index_[idx].size() ? index_[idx].size() : remainingEmptySpace);
+            bucket.insert(bucket.end(), index_[idx].begin(), end_itr);
+            index_[idx].erase(index_[idx].begin(), end_itr);
+        }
 
-    uint32 blockPos = index.tell();
-    uint32 blockSize = 0;
-    uint32 blockHash = 0;
-    uint32 secondBlockHash = 0;
-    index.write32(blockSize);
-    index.write32(blockHash);
-    for (IndexEntry const& entry : index_[idx]) {
-      WriteIndexEntry write;
-      memcpy(write.hash, entry.hash, sizeof(write.hash));
-      *(uint32*) (write.pos + 1) = _byteswap_ulong(entry.offset);
-      write.pos[0] = entry.index / 4;
-      write.pos[1] |= ((entry.index & 3) << 6);
-      write.size = entry.size;
+        std::sort(bucket.begin(), bucket.end(), [](IndexEntry const& lhs, IndexEntry const& rhs) {
+            return memcmp(lhs.hash, rhs.hash, sizeof(Hash)) < 0;
+            });
 
-      index.write(&write, sizeof write);
-      blockSize += sizeof(write);
-      hashlittle2(&write, sizeof write, &blockHash, &secondBlockHash);
+
+        uint32 blockPos = index.tell();
+        uint32 blockSize = 0;
+        uint32 blockHash = 0;
+        uint32 secondBlockHash = 0;
+        index.write32(blockSize);
+        index.write32(blockHash);
+        for (IndexEntry const& entry : bucket) {
+            WriteIndexEntry write;
+            memcpy(write.hash, entry.hash, sizeof(write.hash));
+            *(uint32*)(write.pos + 1) = _byteswap_ulong(entry.offset);
+            write.pos[0] = entry.index / 4;
+            write.pos[1] |= ((entry.index & 3) << 6);
+            write.size = entry.size;
+
+            index.write(&write, sizeof write);
+            blockSize += sizeof(write);
+            hashlittle2(&write, sizeof write, &blockHash, &secondBlockHash);
+        }
+
+        int32 needAmount = 0xC0000 - index.tell();
+
+        std::vector<uint8_t> needRemainingData;
+        needRemainingData.resize(needAmount);
+        memset(needRemainingData.data(), 0, needRemainingData.size());
+        index.write(needRemainingData.data(), needRemainingData.size());
+
+        index.seek(blockPos, SEEK_SET);
+        index.write32(blockSize);
+        index.write32(blockHash);
     }
-
-    while (index.tell() % 4096) {
-        index.write8(0);
-    }
-
-    uint8 fileEndBuffer[0x7800];
-    memset(&fileEndBuffer[0], 0, sizeof fileEndBuffer);
-    index.write(&fileEndBuffer[0], sizeof fileEndBuffer);
-
-    index.seek(blockPos, SEEK_SET);
-    index.write32(blockSize);
-    index.write32(blockHash);
-
-    index_[idx].clear();
   }
 
 }

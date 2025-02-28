@@ -109,7 +109,7 @@ private:
     ProgramData* data_ = nullptr;
     bool terminate_ = false;
 
-    File loadData(std::string const& hash, int idx = 0);
+    File loadData(std::string const& hash, int idx = 0, std::string type = "data");
     File loadData(const NGDP::Hash hash, int idx = 0) {
       return loadData(NGDP::to_string(hash), idx);
     }

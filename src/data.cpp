@@ -149,10 +149,10 @@ void ProgramData::loadBuild(std::string const& build) {
 
 /////////////////////////////////////
 
-File ProgramData::Task::loadData(std::string const& hash, int idx) {
+File ProgramData::Task::loadData(std::string const& hash, int idx, std::string type /*= "data"*/) {
   File file = NGDP::CascStorage::getCache(hash);
   if (file) return file;
-  file = data_->ngdp_->load(hash, "data");
+  file = data_->ngdp_->load(hash, type);
   if (!file) return file;
 
   data_->loading_size = file.size();
@@ -333,12 +333,24 @@ void ProgramData::download(std::string const& path) {
         // save encoding file
 
         auto buildConfig = data_->build_configs[data_->selected_build];
-        //std::string patchConfig = buildConfig["patch-config"];
-        //storage.addConfig(patchConfig, ngdp->load(patchConfig));
+        if (buildConfig.find("patch-config") != buildConfig.end())
+        {
+            std::string patchConfig = buildConfig["patch-config"];
+            storage.addConfig(patchConfig, ngdp->load(patchConfig));
+        }
 
-        std::string encodingHash = split(buildConfig["encoding"])[1];
-        NGDP::from_string(hash, encodingHash);
-        data.addFile(hash, loadData(encodingHash));
+        if (buildConfig.find("patch") != buildConfig.end())
+        {
+            std::string patchHash = buildConfig["patch"];
+            NGDP::from_string(hash, patchHash);
+            data.addFile(hash, loadData(patchHash, 0, "patch"));
+        }
+
+        {
+            std::string encodingHash = split(buildConfig["encoding"])[1];
+            NGDP::from_string(hash, encodingHash);
+            data.addFile(hash, loadData(encodingHash));
+        }
 
         auto& encoding = data_->encoding_;
 

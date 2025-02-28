@@ -154,6 +154,8 @@ namespace NGDP {
     }
 
     File& addFile(const Hash hash, File& file); // <- original (compressed) file
+    void addIndex(const Hash hash, uint32 size, bool isCrossReference = false);
+    void addDataHeader(const Hash hash, uint32 size, uint16 flags = 0);
 
     void finish() {
         for (int i = 0; i < 16; ++i)
@@ -173,8 +175,8 @@ namespace NGDP {
       uint32 offset;
     };
     std::vector<std::vector<IndexEntry>> index_;
+    std::vector<std::vector<IndexEntry>> crossIndicies_;
     File data_;
-    std::vector<uint32> indexCount_;
     uint32 dataCount_;
 
     uint8_t cascGetBucketIndex(const Hash k) {
@@ -184,7 +186,7 @@ namespace NGDP {
 
     uint8_t cascGetBucketIndexCrossReference(const Hash k) {
         uint8_t i = cascGetBucketIndex(k);
-        return i % 16;
+        return (i + 1) % 16;
     }
 
     void writeIndex(int idx);
