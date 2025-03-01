@@ -389,6 +389,8 @@ namespace NGDP {
 
     if (!data_ || (data_.size() + file.size() + 30) > MaxDataSize) {
         data_ = storage_.addData(fmtstring("data.%03u", dataCount_++));
+        Hash sortedReconstructionHash[16];
+
         for (int i = 0; i < 16; ++i) {
             Hash reConstructionHeaderHash;
             memset(reConstructionHeaderHash, 0, sizeof reConstructionHeaderHash);
@@ -396,8 +398,13 @@ namespace NGDP {
             reConstructionHeaderHash[0] = (uint8_t)i;
             reConstructionHeaderHash[1] = (uint8_t)(dataCount_ - 1);
 
-            addIndex(reConstructionHeaderHash, 0);
-            addDataHeader(reConstructionHeaderHash, 0, 1);
+            uint8 bucketIndex2 = cascGetBucketIndexCrossReference(reConstructionHeaderHash);
+            memcpy(&sortedReconstructionHash[bucketIndex2][0], &reConstructionHeaderHash, sizeof reConstructionHeaderHash);
+        }
+
+        for (int i = 0; i < 16; ++i) {
+            addIndex(sortedReconstructionHash[i], 0);
+            addDataHeader(sortedReconstructionHash[i], 0, 1);
         }
     }
 
