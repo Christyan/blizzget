@@ -154,7 +154,7 @@ namespace NGDP {
     }
 
     File& addFile(const Hash hash, File& file); // <- original (compressed) file
-    void addIndex(const Hash hash, uint32 size);
+    void addIndex(uint8_t bucketIndex, const Hash hash, uint32 size);
     void addDataHeader(const Hash hash, uint32 size, uint16 flags = 0);
 
     void finish() {
@@ -165,10 +165,12 @@ namespace NGDP {
                 indexFileSize = index_[i].size();
         }
 
+        static uint32_t blocksize = 0x7800 * 2;
+
         indexFileSize = (indexFileSize * 18) + 0x28;
         indexFileSize += 4096 * 8; // need 0x7800 buffer at end of file
-        if ((indexFileSize % 4096) != 0)
-            indexFileSize += (4096 - (indexFileSize % 4096));
+        if ((indexFileSize % 0x7800) != 0)
+            indexFileSize += (0x7800 - (indexFileSize % 0x7800));
 
         for (int i = 0; i < 16; ++i)
             writeIndex(indexFileSize, i);

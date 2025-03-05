@@ -52,7 +52,7 @@ namespace NGDP {
     : program_(app)
   {
     //File file = HttpRequest::get(HOST + "/" + app + "/cdns");
-    File file = HttpRequest::get("http://26972.wtfthis.eu/24742/cdntest");
+    File file = HttpRequest::get("http://26972.wtfthis.eu/26972/cdn");
     if (!file) {
       throw Exception("failed to fetch cdns file");
     }
@@ -65,7 +65,7 @@ namespace NGDP {
       config.hosts = split(parts[2], ' ');
     }
 
-    file = HttpRequest::get("http://26972.wtfthis.eu/24742/versionst");
+    file = HttpRequest::get("http://26972.wtfthis.eu/26972/versions");
     if (!file) {
       throw Exception("failed to fetch versions file");
     }
@@ -385,8 +385,6 @@ namespace NGDP {
   File& DataStorage::addFile(const Hash hash, File& file) {
     if (!file) return file;
 
-    uint8 bucketIndex = cascGetBucketIndexCrossReference(hash);
-
     if (!data_ || (data_.size() + file.size() + 30) > MaxDataSize) {
         data_ = storage_.addData(fmtstring("data.%03u", dataCount_++));
         Hash sortedReconstructionHash[16];
@@ -403,12 +401,14 @@ namespace NGDP {
         }
 
         for (int i = 0; i < 16; ++i) {
-            addIndex(sortedReconstructionHash[i], 0);
+            addIndex(i, sortedReconstructionHash[i], 0);
             addDataHeader(sortedReconstructionHash[i], 0, 1);
         }
     }
 
-    addIndex(hash, file.size());
+    uint8 bucketIndex = cascGetBucketIndex(hash);
+
+    addIndex(bucketIndex, hash, file.size());
     addDataHeader(hash, file.size());
 
     file.seek(0);
@@ -417,10 +417,8 @@ namespace NGDP {
     return file;
   }
 
-  void DataStorage::addIndex(const Hash hash, uint32 size)
+  void DataStorage::addIndex(uint8_t bucketIndex, const Hash hash, uint32 size)
   {
-      uint8 bucketIndex = cascGetBucketIndexCrossReference(hash);
-
       index_[bucketIndex].emplace_back();
       auto& entry = index_[bucketIndex].back();
       memcpy(entry.hash, hash, sizeof(Hash));
