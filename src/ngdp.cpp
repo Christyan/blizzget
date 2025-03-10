@@ -394,7 +394,6 @@ namespace NGDP {
         for (int i = 0; i < 16; ++i) {
             Hash reConstructionHeaderHash;
             memset(reConstructionHeaderHash, 0, sizeof reConstructionHeaderHash);
-            *((uint64_t*)&reConstructionHeaderHash[1]) = 0x179860F6B53AB282; // its generated from hostname + another thing (m5hash)
 
             char buf[256];
             memset(buf, 0, 256);
