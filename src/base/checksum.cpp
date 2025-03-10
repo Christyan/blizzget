@@ -398,7 +398,7 @@ uint32_t checksum(void const* buf, uint16_t archive_index, uint32_t archive_offs
     };
 
     // Top two bits of the offset must be set to the bottom two bits of the archive index
-    uint32_t offset = (offset & 0x3fffffff) | (archive_index & 3) << 30;
+    uint32_t offset = (archive_offset & 0x3fffffff) | (archive_index & 3) << 30;
    
     uint32_t encoded_offset = TABLE_16C57A8[(offset + 0x1e) & 0xf] ^ (offset + 0x1e);
    
