@@ -178,7 +178,8 @@ namespace NGDP {
 
   private:
     enum {
-      MaxDataSize = 0x40000000,
+      //MaxDataSize = 0x40000000,
+        MaxDataSize = 490000000,
     };
     CascStorage& storage_;
     struct IndexEntry {
