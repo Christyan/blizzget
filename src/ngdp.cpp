@@ -4,6 +4,8 @@
 #include "base/checksum.h"
 #include <algorithm>
 
+#pragma comment(lib, "Ws2_32.lib")
+
 namespace NGDP {
 
   const std::string HOST = "http://m.wowlibrary.com/"; // "http://us.patch.battle.net:1119";
@@ -328,7 +330,7 @@ namespace NGDP {
     path::create(root / "config");
     path::create(root / "data");
     path::create(root / "indices");
-    path::create(root / "patch");
+    //path::create(root / "patch");
 
     std::vector<std::string> names;
     WIN32_FIND_DATA fdata;
@@ -393,6 +395,17 @@ namespace NGDP {
             Hash reConstructionHeaderHash;
             memset(reConstructionHeaderHash, 0, sizeof reConstructionHeaderHash);
             *((uint64_t*)&reConstructionHeaderHash[1]) = 0x179860F6B53AB282; // its generated from hostname + another thing (m5hash)
+
+            char buf[256];
+            memset(buf, 0, 256);
+            gethostname(buf, 256);
+            const std::string constStr = "data/data";
+            MD5 md5;
+            md5.process(buf, strlen(buf));
+            md5.process(constStr.data(), constStr.length());
+            md5.finish(reConstructionHeaderHash);
+            memset(&reConstructionHeaderHash[9], 0, 7);
+
             reConstructionHeaderHash[0] = (uint8_t)i;
             reConstructionHeaderHash[1] = (uint8_t)(dataCount_ - 1);
 
